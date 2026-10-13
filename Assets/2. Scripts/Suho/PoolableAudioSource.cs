@@ -22,8 +22,12 @@ public class PoolableAudioSource : MonoBehaviour, IPoolObject
         }
     }
 
-    public void Play(AudioClip audioClip, float soundEffectVolume)
+    // AudioManager에서 중복 재생 카운트를 올릴 때 사용한 키값 (반환 시 같은 키로 감소시키기 위해 저장)
+    private string countedKey;
+
+    public void Play(AudioClip audioClip, float soundEffectVolume, string countedKey = null)
     {
+        this.countedKey = countedKey;
         // null 체크 추가
         if (audioClip == null)
         {
@@ -54,6 +58,12 @@ public class PoolableAudioSource : MonoBehaviour, IPoolObject
 
     public void Disable()
     {
+        // 이미 풀에 반환된 오브젝트를 다시 반환하면 풀 Queue에 중복으로 들어가므로 무시
+        if (!gameObject.activeSelf)
+        {
+            return;
+        }
+
         // AudioSource 정지
         if (audioSource != null)
         {
@@ -103,10 +113,8 @@ public class PoolableAudioSource : MonoBehaviour, IPoolObject
 
     public void OnReturnToPool()
     {
-        if (AudioSource.clip != null && AudioManager.Instance.NestedDictionary.ContainsKey(AudioSource.clip.name))
-        {
-            AudioManager.Instance.NestedDictionary[AudioSource.clip.name]--;
-        }
+        AudioManager.Instance.OnSfxReleased(countedKey);
+        countedKey = null;
         audioSource.clip = null;
     }
 }

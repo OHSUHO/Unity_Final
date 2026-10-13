@@ -97,7 +97,7 @@ public class ResourceStat : StatBase
     public void ConsumePercent(float percent)
     {
         float amount = MaxValue * percent;
-        CurrentValue = Mathf.Min(CurrentValue - amount, MaxValue);
+        CurrentValue = Mathf.Max(CurrentValue - amount, 0);
         OnValueChanged?.Invoke(CurrentValue);
     }
 
