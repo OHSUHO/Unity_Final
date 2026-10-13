@@ -26,6 +26,7 @@ public class AudioManager : Singleton<AudioManager>
     public Dictionary<string, int> NestedDictionary = new();
     protected ObjectPoolManager objectPoolManager;
     private string sfxPlayerPoolName = "sfxSource";
+    private const int MaxSameSfxCount = 3;
 
     [SerializeField] private AudioSource bgmAudioSource;
     [SerializeField] private GameObject sfxAudioSourcePrefab;
@@ -150,91 +151,68 @@ public class AudioManager : Singleton<AudioManager>
     /* 효과음 재생용 메서드 */
     public void PlaySFX(string clipName)
     {
-        if (string.IsNullOrEmpty(clipName) || clipName == "None")
-        {
-            return;
-        }
-
-        if (objectPoolManager == null)
-        {
-            return;
-        }
-
-
-        if (AudioDictionary != null && AudioDictionary.ContainsKey(clipName))
-        {
-            if (!NestedDictionary.ContainsKey(clipName))
-            {
-                NestedDictionary.Add(clipName, 1);
-            }
-            else if (NestedDictionary[clipName] > 3)
-            {
-                return;
-            }
-
-            NestedDictionary[clipName]++;
-            GameObject sfxPlayer = objectPoolManager.GetObject(sfxPlayerPoolName);
-            if (sfxPlayer == null)
-            {
-                sfxPlayer = Instantiate(sfxAudioSourcePrefab);
-            }
-
-            PoolableAudioSource sfxSource = sfxPlayer.GetComponent<PoolableAudioSource>();
-            if (sfxPlayer != null)
-            {
-                sfxSource.Play(AudioDictionary[clipName], soundEffectVolume * masterVolume);
-            }
-            else
-            {
-                return;
-            }
-        }
-        else
-        {
-            return;
-        }
+        PlaySfxInternal(clipName);
     }
 
     /* 효과음 재생 후 해당 효과음 제어를 위해 만들어진 효과음 Prefab을 Return받는데 사용되는 메서드 */
     public PoolableAudioSource PlaySfxReturnSoundSource(string clipName)
     {
+        return PlaySfxInternal(clipName);
+    }
+
+    /* 같은 키값의 SFX는 동시에 MaxSameSfxCount개까지만 재생 (중복 재생으로 인한 사운드 증폭 방지) */
+    private PoolableAudioSource PlaySfxInternal(string clipName)
+    {
         if (string.IsNullOrEmpty(clipName) || clipName == "None")
         {
-            Debug.LogWarning("SoundManager: PlaySfxReturnSoundSource - clipName이 null 또는 빈 문자열입니다.");
             return null;
         }
 
         if (objectPoolManager == null)
         {
-            Debug.LogWarning("SoundManager: SoundPoolManager를 찾을 수 없습니다.");
+            Debug.LogWarning("SoundManager: ObjectPoolManager를 찾을 수 없습니다.");
             return null;
         }
 
-        if (AudioDictionary != null && AudioDictionary.ContainsKey(clipName))
-        {
-            GameObject sfxPlayer = objectPoolManager.GetObject(sfxPlayerPoolName);
-            if (sfxPlayer == null)
-            {
-                Instantiate(sfxAudioSourcePrefab);
-            }
-
-            PoolableAudioSource sfxSource = sfxPlayer.GetComponent<PoolableAudioSource>();
-            if (sfxPlayer != null)
-            {
-                sfxSource.Play(AudioDictionary[clipName], soundEffectVolume * masterVolume);
-            }
-            else
-            {
-                Debug.LogWarning("SoundManager: SoundSource 객체를 가져올 수 없습니다.");
-            }
-
-            return sfxSource;
-        }
-        else
+        if (AudioDictionary == null || !AudioDictionary.TryGetValue(clipName, out AudioClip clip))
         {
             Debug.LogWarning($"SoundManager: PlaySFX - {clipName}은 존재하지 않는 오디오 클립입니다.");
             return null;
         }
+
+        NestedDictionary.TryGetValue(clipName, out int playingCount);
+        if (playingCount >= MaxSameSfxCount)
+        {
+            return null;
+        }
+
+        GameObject sfxPlayer = objectPoolManager.GetObject(sfxPlayerPoolName);
+        if (sfxPlayer == null)
+        {
+            sfxPlayer = Instantiate(sfxAudioSourcePrefab);
+        }
+
+        PoolableAudioSource sfxSource = sfxPlayer.GetComponent<PoolableAudioSource>();
+        if (sfxSource == null)
+        {
+            Debug.LogWarning("SoundManager: SoundSource 객체를 가져올 수 없습니다.");
+            return null;
+        }
+
+        NestedDictionary[clipName] = playingCount + 1;
+        sfxSource.Play(clip, soundEffectVolume * masterVolume, clipName);
+        return sfxSource;
+    }
+
+    /* PoolableAudioSource가 풀로 돌아갈 때 호출. 재생할 때 사용한 키값으로 카운트를 감소 */
+    public void OnSfxReleased(string clipName)
+    {
+        if (string.IsNullOrEmpty(clipName) || !NestedDictionary.TryGetValue(clipName, out int playingCount))
+        {
+            return;
+        }
+
+        NestedDictionary[clipName] = Mathf.Max(playingCount - 1, 0);
     }
 
     private void LoadSceneEvent()

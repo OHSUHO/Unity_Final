@@ -135,14 +135,6 @@ public class TimeLineManager : SceneOnlySingleton<TimeLineManager>
                         director.SetReferenceValue(shot.VirtualCamera.exposedName, CameraManager.Instance.mainCameraController.vCam);
                     }
                 }
-
-                // 뇌 (CinemachineBrain) 바인딩은 여전히 필요
-                PlayableBinding output = timelineAsset.outputs.FirstOrDefault(o => o.outputTargetType == typeof(CinemachineBrain)
-                );
-                if (output.sourceObject != null)
-                {
-                    director.SetGenericBinding(output.sourceObject, brain);
-                }
             }
 
             if (track is SignalTrack)
@@ -180,6 +172,13 @@ public class TimeLineManager : SceneOnlySingleton<TimeLineManager>
             }
         }
 
+        // 뇌 (CinemachineBrain) 바인딩은 트랙 수와 관계없이 한 번만 필요
+        PlayableBinding brainOutput = timelineAsset.outputs.FirstOrDefault(o => o.outputTargetType == typeof(CinemachineBrain));
+        if (brainOutput.sourceObject != null)
+        {
+            director.SetGenericBinding(brainOutput.sourceObject, brain);
+        }
+
         owner.IsTimeLinePlaying = true;
         director.time = 0f;
         director.Evaluate();
@@ -211,6 +210,9 @@ public class TimeLineManager : SceneOnlySingleton<TimeLineManager>
             {
                 audioSourcePrefab.Disable();
             }
+
+            // 반환한 AudioSource를 비워두지 않으면 다음 타임라인 종료 시 같은 오브젝트를 풀에 또 반환하게 됨
+            AudioSourcePrefabs.Clear();
         }
 
         CameraManager.Instance.skillCameraController.DefaultCamera();
